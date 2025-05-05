@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Semantic Search</title>
+    <link rel="stylesheet" th:href="@{/style.css}"/>
+</head>
+<body>
+<div class="container">
+    <h1>Semantic Ontology Search</h1>
+    <form th:action="@{/search}" method="get">
+        <input type="text" name="term" placeholder="Search term..." th:value="${term}" required/>
+        <button type="submit">Search</button>
+    </form>
+
+    <div class="results" th:if="${results}">
+        <h2>Results for '<span th:text="${term}"></span>':</h2>
+        <ul>
+            <li th:each="res : ${results}" th:text="${res}"></li>
+        </ul>
+    </div>
+</div>
+</body>
+</html>
