@@ -21,14 +21,34 @@ public class OntologyService {
             Map.entry("http://purl.obolibrary.org/obo/IAO_0000412", "Ontology Source"),
             Map.entry("http://www.w3.org/1999/02/22-rdf-syntax-ns#type", "Type")
     );
+    private List<String> getSuperclassChain(String uri) {
+        List<String> chain = new ArrayList<>();
 
+        String queryStr = "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> " +
+                "SELECT DISTINCT ?superclass ?label WHERE { " +
+                "  <" + uri + "> rdfs:subClassOf+ ?superclass . " +
+                "  ?superclass rdfs:label ?label . " +
+                "  FILTER(langMatches(lang(?label), 'EN')) } ORDER BY ?label";
+
+        Query query = QueryFactory.create(queryStr);
+        try (QueryExecution qexec = QueryExecutionFactory.sparqlService(FUSEKI_ENDPOINT, query)) {
+            ResultSet rs = qexec.execSelect();
+            while (rs.hasNext()) {
+                QuerySolution sol = rs.next();
+                String label = sol.getLiteral("label").getString();
+                chain.add(label);
+            }
+        }
+
+        return chain;
+    }
     public List<Map<String, String>> queryOntology(String searchTerm) {
         List<Map<String, String>> results = new ArrayList<>();
 
         String sparql = "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> " +
                 "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> " +
                 "PREFIX owl: <http://www.w3.org/2002/07/owl#> " +
-                "SELECT DISTINCT ?class ?label WHERE { " +
+                "SELECT ?class ?label WHERE { " +
                 "  ?class rdf:type owl:Class . " +
                 "  ?class rdfs:label ?label . " +
                 "  FILTER(CONTAINS(LCASE(str(?label)), \"" + searchTerm.toLowerCase() + "\")) " +
@@ -39,9 +59,17 @@ public class OntologyService {
             ResultSet rs = qexec.execSelect();
             while (rs.hasNext()) {
                 QuerySolution sol = rs.next();
+                String uri = sol.get("class").toString();
+                String label = sol.getLiteral("label").getString();
+
                 Map<String, String> result = new HashMap<>();
-                result.put("label", sol.getLiteral("label").getString());
-                result.put("uri", sol.get("class").toString());
+                result.put("label", label);
+                result.put("uri", uri);
+
+                // Fetch the superclass chain for this match
+                List<String> superChain = getSuperclassChain(uri);
+                result.put("chain", String.join(" → ", superChain));
+
                 results.add(result);
             }
         }
@@ -49,7 +77,7 @@ public class OntologyService {
         return results;
     }
 
-    private List<String> getSuperclassChain(String uri) {
+    private List<String> getSuperclassChainFromUri(String uri) {
         List<String> chain = new ArrayList<>();
         getSuperRecursive(uri, chain);
         Collections.reverse(chain);
@@ -167,7 +195,7 @@ public class OntologyService {
         }
         List<String> alternatives = getAlternativeLabels(uri);
         List<String> synonyms = getSynonyms(uri);
-        List<String> superclassChain = getSuperclassChain(uri);
+        List<String> superclassChain = getSuperclassChainFromUri(uri);
 
         if (!synonyms.isEmpty()) {
             result.put("Synonyms", String.join("; ", synonyms));

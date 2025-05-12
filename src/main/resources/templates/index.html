@@ -29,8 +29,11 @@
                     <div th:each="result : ${results}" class="list-group-item">
                         <h5>
                             <a th:href="@{/details(uri=${result.uri})}" th:text="${result.label}" class="text-decoration-none"></a>
+                            <span class="badge bg-secondary ms-2"
+                                  th:text="${#strings.substring(result.uri, result.uri.lastIndexOf('/') + 1)}"></span>
                         </h5>
                         <p class="text-muted" th:text="${result.uri}"></p>
+<!--                        <p class="text-secondary small" th:text="'Class chain: ' + ${result.chain}"></p>-->
                     </div>
                 </div>
             </div>
