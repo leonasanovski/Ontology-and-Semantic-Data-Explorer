@@ -41,4 +41,9 @@ public class OntologyController {
         model.addAttribute("uri", uri);
         return "details";
     }
+    @GetMapping("/api/fulltree")
+    @ResponseBody
+    public List<Map<String, Object>> getFullTree(@RequestParam String selectedUri) {
+        return ontologyService.getFullOntologyTree(selectedUri);
+    }
 }

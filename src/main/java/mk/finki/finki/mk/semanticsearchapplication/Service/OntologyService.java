@@ -21,6 +21,87 @@ public class OntologyService {
             Map.entry("http://purl.obolibrary.org/obo/IAO_0000412", "Ontology Source"),
             Map.entry("http://www.w3.org/1999/02/22-rdf-syntax-ns#type", "Type")
     );
+
+
+    public List<Map<String, Object>> getFullOntologyTree(String selectedUri) {
+        return getChildrenRecursive(null, selectedUri);
+    }
+
+    private List<Map<String, Object>> getChildrenRecursive(String parentUri, String selectedUri) {
+        String queryStr;
+
+        if (parentUri == null) {
+            // Top-level classes (no superclasses)
+            queryStr = """
+            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+            PREFIX owl: <http://www.w3.org/2002/07/owl#>
+            SELECT ?class ?label WHERE {
+                ?class a owl:Class .
+                FILTER NOT EXISTS { ?class rdfs:subClassOf ?any }
+                OPTIONAL { ?class rdfs:label ?label }
+            }
+        """;
+        } else {
+            // Children of the current class
+            queryStr = String.format("""
+            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+            PREFIX owl: <http://www.w3.org/2002/07/owl#>
+            SELECT ?class ?label WHERE {
+                ?class rdfs:subClassOf <%s> .
+                OPTIONAL { ?class rdfs:label ?label }
+            }
+        """, parentUri);
+        }
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        Query query = QueryFactory.create(queryStr);
+
+        try (QueryExecution qexec = QueryExecutionFactory.sparqlService(FUSEKI_ENDPOINT, query)) {
+            ResultSet results = qexec.execSelect();
+
+            while (results.hasNext()) {
+                QuerySolution sol = results.next();
+
+                String classUri = sol.getResource("class").getURI();
+                String label = sol.contains("label") ? sol.getLiteral("label").getString() : classUri;
+
+                Map<String, Object> node = new HashMap<>();
+                node.put("id", classUri);
+                node.put("text", classUri.equals(selectedUri) ? "<b>" + label + "</b>" : label);
+                node.put("children", getChildrenRecursive(classUri, selectedUri));
+
+                // Automatically open path leading to selected class
+                if (classUri.equals(selectedUri) || isAncestorOf(selectedUri, classUri)) {
+                    node.put("state", Map.of("opened", true));
+                }
+
+                result.add(node);
+            }
+        } catch (Exception e) {
+            System.err.println("SPARQL ERROR for parentUri = " + parentUri);
+            e.printStackTrace();
+        }
+
+        return result;
+    }
+
+    private boolean isAncestorOf(String selectedUri, String candidateAncestor) {
+        String queryStr = String.format("""
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        ASK {
+            <%s> rdfs:subClassOf+ <%s> .
+        }
+    """, selectedUri, candidateAncestor);
+
+        try (QueryExecution qexec = QueryExecutionFactory.sparqlService(FUSEKI_ENDPOINT, QueryFactory.create(queryStr))) {
+            return qexec.execAsk();
+        } catch (Exception e) {
+            System.err.println("Failed to check ancestry for: " + candidateAncestor);
+            e.printStackTrace();
+            return false;
+        }
+    }
+
     private List<String> getSuperclassChain(String uri) {
         List<String> chain = new ArrayList<>();
 
