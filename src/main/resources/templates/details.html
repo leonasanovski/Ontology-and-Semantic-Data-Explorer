@@ -46,31 +46,33 @@
                             'plugins': ["wholerow", "html_data"]
                         });
 
-
                         fetch('/api/tree/path?uri=' + encodeURIComponent(selectedUri))
                             .then(res => res.json())
                             .then(path => {
                                 let i = 0;
                                 function expandNext() {
                                     if (i >= path.length - 1) return;
-
                                     const current = path[i];
-                                    const next = path[i + 1];
-
                                     $('#ontologyTree').jstree('open_node', current, function () {
                                         i++;
                                         expandNext();
                                     });
                                 }
 
-
                                 $('#ontologyTree').on('ready.jstree', function () {
                                     expandNext();
-
-
                                     $('#ontologyTree').jstree('select_node', selectedUri);
                                 });
                             });
+
+
+                        $('#ontologyTree').on('select_node.jstree', function (e, data) {
+                            const selected = data.node;
+                            const uri = selected.id;
+                            if (uri !== selectedUri) {
+                                window.location.href = '/details?uri=' + encodeURIComponent(uri);
+                            }
+                        });
                     });
                 </script>
             </div>
