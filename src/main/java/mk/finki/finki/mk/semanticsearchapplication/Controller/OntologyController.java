@@ -41,9 +41,22 @@ public class OntologyController {
         model.addAttribute("uri", uri);
         return "details";
     }
-    @GetMapping("/api/fulltree")
+    @GetMapping("/api/tree/roots")
     @ResponseBody
-    public List<Map<String, Object>> getFullTree(@RequestParam String selectedUri) {
-        return ontologyService.getFullOntologyTree(selectedUri);
+    public List<Map<String, Object>> getRootTree() {
+        return ontologyService.getChildrenForUri(null, null);
+    }
+
+    @GetMapping("/api/tree/children")
+    @ResponseBody
+    public List<Map<String, Object>> getChildren(
+            @RequestParam String uri,
+            @RequestParam(required = false) String selectedUri) {
+        return ontologyService.getChildrenForUri(uri, selectedUri);
+    }
+    @GetMapping("/api/tree/path")
+    @ResponseBody
+    public List<String> getPath(@RequestParam String uri) {
+        return ontologyService.getPathToRoot(uri);
     }
 }

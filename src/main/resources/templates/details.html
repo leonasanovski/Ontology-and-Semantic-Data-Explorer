@@ -28,18 +28,47 @@
                     document.addEventListener("DOMContentLoaded", function () {
                         const selectedUri = /*[[${uri}]]*/ "";
 
-                        fetch('/api/fulltree?selectedUri=' + encodeURIComponent(selectedUri))
-                            .then(res => res.json())
-                            .then(data => {
-                                $('#ontologyTree').jstree({
-                                    'core': {
-                                        'data': data,
-                                        'themes': {
-                                            'dots': true,
-                                            'icons': false  // remove folder icon
-                                        }
+                        $('#ontologyTree').jstree({
+                            'core': {
+                                'data': {
+                                    'url': function (node) {
+                                        return node.id === '#' ?
+                                            '/api/tree/roots' :
+                                            '/api/tree/children?uri=' + encodeURIComponent(node.id) + '&selectedUri=' + encodeURIComponent(selectedUri);
                                     },
-                                    'plugins': ["wholerow", "html_data"]
+                                    'dataType': 'json'
+                                },
+                                'themes': {
+                                    'dots': true,
+                                    'icons': false
+                                }
+                            },
+                            'plugins': ["wholerow", "html_data"]
+                        });
+
+
+                        fetch('/api/tree/path?uri=' + encodeURIComponent(selectedUri))
+                            .then(res => res.json())
+                            .then(path => {
+                                let i = 0;
+                                function expandNext() {
+                                    if (i >= path.length - 1) return;
+
+                                    const current = path[i];
+                                    const next = path[i + 1];
+
+                                    $('#ontologyTree').jstree('open_node', current, function () {
+                                        i++;
+                                        expandNext();
+                                    });
+                                }
+
+
+                                $('#ontologyTree').on('ready.jstree', function () {
+                                    expandNext();
+
+
+                                    $('#ontologyTree').jstree('select_node', selectedUri);
                                 });
                             });
                     });
