@@ -85,54 +85,69 @@
 
             <table class="table table-bordered table-striped table-sm">
                 <thead>
-                <tr><th>Property</th><th>Value</th></tr>
+                <tr>
+                    <th>Property</th>
+                    <th>Value</th>
+                </tr>
                 </thead>
                 <tbody>
                 <tr th:each="entry : ${details.entrySet()}">
+                    <!-- Property name -->
                     <td th:text="${entry.key}"></td>
-                    <td>
-                        <!-- superclass chain -->
-                        <span th:if="${entry.key == 'Superclass Chain'}"
-                              th:each="pair, stat : ${#strings.arraySplit(entry.value, ';')}"
-                              th:with="label=${pair.substring(0, pair.indexOf('|'))},
-                                       superclassUri=${pair.substring(pair.indexOf('|') + 1)}">
-                            <a th:href="@{/details(uri=${superclassUri})}" th:text="${label}"
-                               class="text-decoration-none fw-semibold text-primary"></a>
-                            <span th:if="${!stat.last}"> → </span>
-                        </span>
 
-                        <!-- synonyms -->
-                        <span th:if="${entry.key == 'Synonyms'}">
+                    <!-- Property value logic -->
+                    <td>
+                        <!-- Superclass Chain -->
+                        <div th:if="${entry.key == 'Superclass Chain'}">
+            <span th:each="pair, stat : ${#strings.arraySplit(entry.value, ';')}"
+                  th:with="label=${pair.substring(0, pair.indexOf('|'))},
+                           superclassUri=${pair.substring(pair.indexOf('|') + 1)}">
+                <a th:href="@{/details(uri=${superclassUri})}" th:text="${label}"
+                   class="text-decoration-none fw-semibold text-primary"></a>
+                <span th:if="${!stat.last}"> → </span>
+            </span>
+                        </div>
+
+                        <!-- Synonyms -->
+                        <div th:if="${entry.key == 'Synonyms'}">
                             <span th:if="${entry.value.contains('There are no')}" th:text="${entry.value}" class="fst-italic"></span>
                             <span th:if="${!entry.value.contains('There are no')}"
                                   th:each="syn : ${#strings.arraySplit(entry.value, ';')}"
                                   th:text="${syn.trim()}" class="me-2 badge text-bg-light"></span>
-                        </span>
+                        </div>
 
-                        <!-- alternative -->
-                        <span th:if="${entry.key == 'Alternative Label'}">
+                        <!-- Alternative Labels -->
+                        <div th:if="${entry.key == 'Alternative Label'}">
                             <span th:if="${entry.value.contains('There are no')}" th:text="${entry.value}" class="fst-italic"></span>
                             <span th:if="${!entry.value.contains('There are no')}"
                                   th:each="alt : ${#strings.arraySplit(entry.value, ';')}"
                                   th:text="${alt.trim()}" class="me-2 text-success fw-semibold"></span>
-                        </span>
+                        </div>
 
-                        <!-- general -->
-                        <span th:if="${entry.value.contains('|')
-                                     && entry.key != 'Synonyms'
-                                     && entry.key != 'Superclass Chain'}"
-                              th:with="label=${entry.value.substring(0, entry.value.indexOf('|'))},
-                                       uriLink=${entry.value.substring(entry.value.indexOf('|') + 1)}">
+                        <!-- Notation -->
+                        <div th:if="${entry.key == 'Notation'}">
+                            <span class="badge bg-secondary" th:text="${entry.value}"></span>
+                        </div>
+
+                        <!-- General clickable label|uri pair -->
+                        <div th:if="${entry.value.contains('|')
+                     && entry.key != 'Synonyms'
+                     && entry.key != 'Superclass Chain'}"
+                             th:with="label=${entry.value.substring(0, entry.value.indexOf('|'))},
+                      uriLink=${entry.value.substring(entry.value.indexOf('|') + 1)}">
                             <a th:href="@{/details(uri=${uriLink})}" th:text="${label}"
                                class="text-decoration-none fw-medium btn btn-outline-primary me-2"></a>
-                        </span>
+                        </div>
 
-                        <!-- fallback plain value -->
-                        <span th:if="${!entry.value.contains('|')
-                                     && entry.key != 'Synonyms'
-                                     && entry.key != 'Alternative Label'
-                                     && entry.key != 'Superclass Chain'}"
-                              th:text="${entry.value}"></span>
+
+                        
+                        <div th:if="${!entry.value.contains('|')
+                     && entry.key != 'Synonyms'
+                     && entry.key != 'Alternative Label'
+                     && entry.key != 'Superclass Chain'
+                     && entry.key != 'Notation'}"
+                             th:text="${entry.value}"></div>
+
                     </td>
                 </tr>
                 </tbody>

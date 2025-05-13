@@ -12,7 +12,6 @@ import java.util.*;
 
 @Service
 public class OntologyService {
-
     private static final String FUSEKI_ENDPOINT = "http://localhost:3030/food_DB/query";
     private static final Map<String, String> PROPERTY_LABELS = Map.ofEntries(
             Map.entry("http://www.w3.org/2000/01/rdf-schema#label", "Preferred Name"),
@@ -163,7 +162,6 @@ public class OntologyService {
 
                 List<String> superChain = getSuperclassChain(uri);
                 result.put("chain", String.join(" → ", superChain));
-
                 results.add(result);
             }
         }
@@ -287,6 +285,10 @@ public class OntologyService {
                 result.put(readableLabel, value);
             }
         }
+        String[] segments = uri.split("[/#]");
+        String notation = segments[segments.length - 1];
+        result.put("Notation", notation);
+
         List<String> alternatives = getAlternativeLabels(uri);
         List<String> synonyms = getSynonyms(uri);
         List<String> superclassChain = getSuperclassChainFromUri(uri);
@@ -306,6 +308,7 @@ public class OntologyService {
         if (!superclassChain.isEmpty()) {
             result.put("Superclass Chain", String.join(";", superclassChain));
         }
+
 
 
         System.out.println(result.get("Synonyms").toString());
