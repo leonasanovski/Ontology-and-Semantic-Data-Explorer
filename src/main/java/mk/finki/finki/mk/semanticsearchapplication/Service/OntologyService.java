@@ -20,6 +20,100 @@ public class OntologyService {
             Map.entry("http://purl.obolibrary.org/obo/IAO_0000412", "Ontology Source"),
             Map.entry("http://www.w3.org/1999/02/22-rdf-syntax-ns#type", "Type")
     );
+
+    private boolean hasChildren(String uri) {
+        String queryStr = String.format("""
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        ASK {
+            ?child rdfs:subClassOf <%s> .
+        }
+    """, uri);
+
+        try (QueryExecution qexec = QueryExecutionFactory.sparqlService(FUSEKI_ENDPOINT, QueryFactory.create(queryStr))) {
+            return qexec.execAsk();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    public List<String> getPathToRoot(String uri) {
+        List<String> path = new ArrayList<>();
+        while (uri != null) {
+            path.add(0, uri);  // add to front so root is first
+            uri = getSuperclassOf(uri);
+        }
+        return path;
+    }
+
+    private String getSuperclassOf(String uri) {
+        String queryStr = String.format("""
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        SELECT ?super WHERE {
+            <%s> rdfs:subClassOf ?super .
+        } LIMIT 1
+    """, uri);
+
+        try (QueryExecution qexec = QueryExecutionFactory.sparqlService(FUSEKI_ENDPOINT, QueryFactory.create(queryStr))) {
+            ResultSet results = qexec.execSelect();
+            if (results.hasNext()) {
+                return results.next().getResource("super").getURI();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+
+    public List<Map<String, Object>> getChildrenForUri(String parentUri, String selectedUri){
+        String queryStr;
+
+        if (parentUri == null) {
+            queryStr = """
+            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+            PREFIX owl: <http://www.w3.org/2002/07/owl#>
+            SELECT ?class ?label WHERE {
+                ?class a owl:Class .
+                FILTER NOT EXISTS { ?class rdfs:subClassOf ?any }
+                OPTIONAL { ?class rdfs:label ?label }
+            }
+        """;
+        } else {
+            queryStr = String.format("""
+            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+            SELECT ?class ?label WHERE {
+                ?class rdfs:subClassOf <%s> .
+                OPTIONAL { ?class rdfs:label ?label }
+            }
+        """, parentUri);
+        }
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        Query query = QueryFactory.create(queryStr);
+        try (QueryExecution qexec = QueryExecutionFactory.sparqlService(FUSEKI_ENDPOINT, query)) {
+            ResultSet results = qexec.execSelect();
+            while (results.hasNext()) {
+                QuerySolution sol = results.next();
+                String uri = sol.getResource("class").getURI();
+                String label = sol.contains("label") ? sol.getLiteral("label").getString() : uri;
+
+                String text = uri.equals(selectedUri) ? "<b>" + label + "</b>" : label;
+                Map<String, Object> node = new HashMap<>();
+                node.put("id", uri);
+                node.put("text", text);
+                node.put("children", hasChildren(uri));
+                result.add(node);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return result;
+    }
+
+
+
     private List<String> getSuperclassChain(String uri) {
         List<String> chain = new ArrayList<>();
 
@@ -65,7 +159,7 @@ public class OntologyService {
                 result.put("label", label);
                 result.put("uri", uri);
 
-                // Fetch the superclass chain for this match
+
                 List<String> superChain = getSuperclassChain(uri);
                 result.put("chain", String.join(" → ", superChain));
                 results.add(result);
