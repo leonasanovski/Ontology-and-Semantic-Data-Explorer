@@ -1,5 +1,6 @@
 package mk.finki.finki.mk.semanticsearchapplication.Service;
 
+import mk.finki.finki.mk.semanticsearchapplication.Component.SearchTermTracker;
 import org.apache.jena.query.Query;
 import org.apache.jena.query.QueryExecution;
 import org.apache.jena.query.QueryExecutionFactory;
@@ -12,6 +13,7 @@ import java.util.*;
 
 @Service
 public class OntologyService {
+//    private final SearchTermTracker searchTermTracker;
     private static final String FUSEKI_ENDPOINT = "http://localhost:3030/food_DB/query";
     private static final Map<String, String> PROPERTY_LABELS = Map.ofEntries(
             Map.entry("http://www.w3.org/2000/01/rdf-schema#label", "Preferred Name"),
@@ -20,15 +22,92 @@ public class OntologyService {
             Map.entry("http://purl.obolibrary.org/obo/IAO_0000412", "Ontology Source"),
             Map.entry("http://www.w3.org/1999/02/22-rdf-syntax-ns#type", "Type")
     );
-
-    private boolean hasChildren(String uri) {
-        String queryStr = String.format("""
+    private static final String HAS_CHILD_BOOLEAN = """
         PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
         ASK {
             ?child rdfs:subClassOf <%s> .
         }
-    """, uri);
+    """;
+    private static final String SUPER_CLASS = """
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        SELECT ?super WHERE {
+            <%s> rdfs:subClassOf ?super .
+        } LIMIT 1
+    """;
+    private static final String TOP_LEVEL_CLASSES = """
+            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+            PREFIX owl: <http://www.w3.org/2002/07/owl#>
+            SELECT ?class ?label WHERE {
+                ?class a owl:Class .
+                FILTER NOT EXISTS { ?class rdfs:subClassOf ?any }
+                OPTIONAL { ?class rdfs:label ?label }
+            }
+        """;
+    private static final String DIRECT_SUBCLASSES = """
+            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+            SELECT ?class ?label WHERE {
+                ?class rdfs:subClassOf <%s> .
+                OPTIONAL { ?class rdfs:label ?label }
+            }
+        """;
+//
+//    public OntologyService(SearchTermTracker searchTermTracker) {
+//        this.searchTermTracker = searchTermTracker;
+//    }
 
+    public static String buildSearchQuery(String searchTerm) {
+        return "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> " +
+                "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> " +
+                "PREFIX owl: <http://www.w3.org/2002/07/owl#> " +
+                "SELECT ?class ?label WHERE { " +
+                "  ?class rdf:type owl:Class . " +
+                "  ?class rdfs:label ?label . " +
+                "  FILTER(CONTAINS(LCASE(str(?label)), \"" + searchTerm.toLowerCase() + "\")) " +
+                "} ORDER BY ?label";
+    }
+    public static String buildSuperChainQuery(String uri){
+        return "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> " +
+                "SELECT DISTINCT ?superclass ?label WHERE { " +
+                "  <" + uri + "> rdfs:subClassOf+ ?superclass . " +
+                "  ?superclass rdfs:label ?label . " +
+                "  FILTER(langMatches(lang(?label), 'EN')) } ORDER BY ?label";
+    }
+    public static String directSuperclassQuery(String currentUri){
+        return "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> " +
+                "SELECT ?superclass ?label WHERE { " +
+                "  <" + currentUri + "> rdfs:subClassOf ?superclass . " +
+                "  OPTIONAL { ?superclass rdfs:label ?label . FILTER(langMatches(lang(?label), \"EN\")) } " +
+                "} LIMIT 1";
+    }
+    public static String synonymsQuery(String uri){
+        return "PREFIX obo: <http://purl.obolibrary.org/obo/> " +
+                "SELECT ?synonym WHERE { " +
+                "<" + uri + "> obo:IAO_0000111 ?synonym . " +
+                "FILTER(langMatches(lang(?synonym), 'EN')) }";
+    }
+    public static String attributeQuery(String uri){
+        return "PREFIX skos: <http://www.w3.org/2004/02/skos/core#> " +
+                "SELECT ?alt WHERE { " +
+                "<" + uri + "> skos:altLabel ?alt . " +
+                "FILTER(langMatches(lang(?alt), 'EN')) }";
+    }
+    public static String getPropertiesQuery(String uri){
+        return "SELECT ?prop ?value WHERE { " +
+                "<" + uri + "> ?prop ?value " +
+                "}";
+    }
+
+    public static String labelsInRdf(String value){
+        return "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> " +
+                "PREFIX owl: <http://www.w3.org/2002/07/owl#> " +
+                "SELECT ?label WHERE { " +
+                "  OPTIONAL { <" + value + "> a owl:Class . } " +
+                "  <" + value + "> rdfs:label ?label . " +
+                "  FILTER(langMatches(lang(?label), 'EN')) " +
+                "} LIMIT 3";
+    }
+    private boolean hasChildren(String uri) {
+        String queryStr = String.format(HAS_CHILD_BOOLEAN, uri);
         try (QueryExecution qexec = QueryExecutionFactory.sparqlService(FUSEKI_ENDPOINT, QueryFactory.create(queryStr))) {
             return qexec.execAsk();
         } catch (Exception e) {
@@ -47,13 +126,7 @@ public class OntologyService {
     }
 
     private String getSuperclassOf(String uri) {
-        String queryStr = String.format("""
-        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-        SELECT ?super WHERE {
-            <%s> rdfs:subClassOf ?super .
-        } LIMIT 1
-    """, uri);
-
+        String queryStr = String.format(SUPER_CLASS, uri);
         try (QueryExecution qexec = QueryExecutionFactory.sparqlService(FUSEKI_ENDPOINT, QueryFactory.create(queryStr))) {
             ResultSet results = qexec.execSelect();
             if (results.hasNext()) {
@@ -70,23 +143,9 @@ public class OntologyService {
         String queryStr;
 
         if (parentUri == null) {
-            queryStr = """
-            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-            PREFIX owl: <http://www.w3.org/2002/07/owl#>
-            SELECT ?class ?label WHERE {
-                ?class a owl:Class .
-                FILTER NOT EXISTS { ?class rdfs:subClassOf ?any }
-                OPTIONAL { ?class rdfs:label ?label }
-            }
-        """;
+            queryStr = TOP_LEVEL_CLASSES;
         } else {
-            queryStr = String.format("""
-            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-            SELECT ?class ?label WHERE {
-                ?class rdfs:subClassOf <%s> .
-                OPTIONAL { ?class rdfs:label ?label }
-            }
-        """, parentUri);
+            queryStr = String.format(DIRECT_SUBCLASSES, parentUri);
         }
 
         List<Map<String, Object>> result = new ArrayList<>();
@@ -117,11 +176,7 @@ public class OntologyService {
     private List<String> getSuperclassChain(String uri) {
         List<String> chain = new ArrayList<>();
 
-        String queryStr = "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> " +
-                "SELECT DISTINCT ?superclass ?label WHERE { " +
-                "  <" + uri + "> rdfs:subClassOf+ ?superclass . " +
-                "  ?superclass rdfs:label ?label . " +
-                "  FILTER(langMatches(lang(?label), 'EN')) } ORDER BY ?label";
+        String queryStr = buildSuperChainQuery(uri);
 
         Query query = QueryFactory.create(queryStr);
         try (QueryExecution qexec = QueryExecutionFactory.sparqlService(FUSEKI_ENDPOINT, query)) {
@@ -136,16 +191,11 @@ public class OntologyService {
         return chain;
     }
     public List<Map<String, String>> queryOntology(String searchTerm) {
+//        searchTermTracker.trackSearch(searchTerm);
+
         List<Map<String, String>> results = new ArrayList<>();
 
-        String sparql = "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> " +
-                "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> " +
-                "PREFIX owl: <http://www.w3.org/2002/07/owl#> " +
-                "SELECT ?class ?label WHERE { " +
-                "  ?class rdf:type owl:Class . " +
-                "  ?class rdfs:label ?label . " +
-                "  FILTER(CONTAINS(LCASE(str(?label)), \"" + searchTerm.toLowerCase() + "\")) " +
-                "} ORDER BY ?label";
+        String sparql = buildSearchQuery(searchTerm);
 
         Query query = QueryFactory.create(sparql);
         try (QueryExecution qexec = QueryExecutionFactory.sparqlService(FUSEKI_ENDPOINT, query)) {
@@ -177,12 +227,7 @@ public class OntologyService {
     }
 
     private void getSuperRecursive(String currentUri, List<String> chain) {
-        String queryStr =
-                "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> " +
-                        "SELECT ?superclass ?label WHERE { " +
-                        "  <" + currentUri + "> rdfs:subClassOf ?superclass . " +
-                        "  OPTIONAL { ?superclass rdfs:label ?label . FILTER(langMatches(lang(?label), \"EN\")) } " +
-                        "} LIMIT 1";
+        String queryStr = directSuperclassQuery(currentUri);
         Query query = QueryFactory.create(queryStr);
         try (QueryExecution qe = QueryExecutionFactory.sparqlService(FUSEKI_ENDPOINT, query)) {
             ResultSet rs = qe.execSelect();
@@ -200,11 +245,7 @@ public class OntologyService {
     private List<String> getSynonyms(String uri){
         List<String> synonyms = new ArrayList<>();
 
-        String synonymQueryStr =
-                "PREFIX obo: <http://purl.obolibrary.org/obo/> " +
-                        "SELECT ?synonym WHERE { " +
-                        "<" + uri + "> obo:IAO_0000111 ?synonym . " +
-                        "FILTER(langMatches(lang(?synonym), 'EN')) }";
+        String synonymQueryStr = synonymsQuery(uri);
 
         Query synonymQuery = QueryFactory.create(synonymQueryStr);
         try (QueryExecution synExec = QueryExecutionFactory.sparqlService(FUSEKI_ENDPOINT, synonymQuery)) {
@@ -223,11 +264,7 @@ public class OntologyService {
 
     private List<String> getAlternativeLabels(String uri) {
         List<String> alternatives = new ArrayList<>();
-        String queryStr =
-                "PREFIX skos: <http://www.w3.org/2004/02/skos/core#> " +
-                        "SELECT ?alt WHERE { " +
-                        "<" + uri + "> skos:altLabel ?alt . " +
-                        "FILTER(langMatches(lang(?alt), 'EN')) }";
+        String queryStr = attributeQuery(uri);
 
         Query query = QueryFactory.create(queryStr);
         try (QueryExecution exec = QueryExecutionFactory.sparqlService(FUSEKI_ENDPOINT, query)) {
@@ -243,14 +280,25 @@ public class OntologyService {
         }
         return alternatives;
     }
-
+    private String getLabelForUri(String uri) {
+        String queryStr = labelsInRdf(uri);
+        Query query = QueryFactory.create(queryStr);
+        try (QueryExecution exec = QueryExecutionFactory.sparqlService(FUSEKI_ENDPOINT, query)) {
+            ResultSet rs = exec.execSelect();
+            if (rs.hasNext()) {
+                QuerySolution sol = rs.next();
+                return sol.getLiteral("label").getString();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
     public Map<String, String> getClassDetails(String uri) {
         Map<String, String> result = new LinkedHashMap<>();
         result.put("Id", uri);
 
-        String sparql = "SELECT ?prop ?value WHERE { " +
-                "<" + uri + "> ?prop ?value " +
-                "}";
+        String sparql = getPropertiesQuery(uri);
 
         Query query = QueryFactory.create(sparql);
         try (QueryExecution qexec = QueryExecutionFactory.sparqlService(FUSEKI_ENDPOINT, query)) {
@@ -261,23 +309,9 @@ public class OntologyService {
                 String value = sol.get("value").toString();
                 String readableLabel = PROPERTY_LABELS.getOrDefault(rawProp, rawProp);
                 if (value.startsWith("http")) {
-                    String labelQueryStr =
-                            "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> " +
-                                    "PREFIX owl: <http://www.w3.org/2002/07/owl#> " +
-                                    "SELECT ?label WHERE { " +
-                                    "  OPTIONAL { <" + value + "> a owl:Class . } " +
-                                    "  <" + value + "> rdfs:label ?label . " +
-                                    "  FILTER(langMatches(lang(?label), 'EN')) " +
-                                    "} LIMIT 3";
-
-                    Query labelQuery = QueryFactory.create(labelQueryStr);
-                    try (QueryExecution labelExec = QueryExecutionFactory.sparqlService(FUSEKI_ENDPOINT, labelQuery)) {
-                        ResultSet labelRs = labelExec.execSelect();
-                        if (labelRs.hasNext()) {
-                            QuerySolution labelSol = labelRs.next();
-                            String label = labelSol.getLiteral("label").getString();
-                            value = label + "|" + value;
-                        }
+                    String label = getLabelForUri(value);
+                    if (label != null) {
+                        value = label + "|" + value;
                     }
                 }
                 value = value.contains("@") ? value.substring(0,value.lastIndexOf("@")) : value;

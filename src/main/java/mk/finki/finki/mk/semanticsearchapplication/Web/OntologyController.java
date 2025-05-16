@@ -1,5 +1,6 @@
-package mk.finki.finki.mk.semanticsearchapplication.Controller;
+package mk.finki.finki.mk.semanticsearchapplication.Web;
 
+import mk.finki.finki.mk.semanticsearchapplication.Component.SearchTermTracker;
 import mk.finki.finki.mk.semanticsearchapplication.Service.OntologyService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
@@ -14,16 +15,23 @@ public class OntologyController {
 
     @Autowired
     private OntologyService ontologyService;
+    @Autowired
+    private SearchTermTracker searchTermTracker;
 
     @GetMapping("/")
     public String index() {
         return "index";
     }
 
-    //get the searched term and gives the related things with it
     @GetMapping("/search")
     public String search(@RequestParam String term, Model model) {
+        if (term == null || term.trim().isEmpty() || !term.matches("^[\\p{L}0-9\\s\\-_,.()]+$")) {
+            model.addAttribute("error", String.format("The term %s you searched, does not exist. Try again :)", term));
+            return "index";
+        }
         List<Map<String,String>> results = ontologyService.queryOntology(term);
+        searchTermTracker.trackSearch(term);
+
         model.addAttribute("results", results);
         model.addAttribute("term", term);
         long matches = results.stream()
@@ -31,6 +39,7 @@ public class OntologyController {
                 .distinct()
                 .count();
         model.addAttribute("matches_count", matches);
+        model.addAttribute("top_searches", searchTermTracker.getTopNSearchedTerms(3));
         return "index";
     }
 

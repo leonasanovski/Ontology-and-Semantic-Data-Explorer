@@ -12,7 +12,7 @@
     <div class="row justify-content-center">
         <div class="col-md-8">
 
-            <h1 class="mb-4 text-center">🔎 Semantic Ontology Search</h1>
+            <h1 class="mb-4 text-center">Semantic Ontology Search</h1>
 
             <form th:action="@{/search}" method="get" class="mb-4">
                 <div class="input-group">
@@ -22,9 +22,20 @@
                 </div>
                 <small class="form-text text-muted">e.g. <code>milk</code>, <code>cream</code>, <code>apple</code></small>
             </form>
-
+            <div th:if="${error}" class="alert alert-warning" role="alert">
+                <span class="text-danger-emphasis" th:text="${error}"></span>
+            </div>
+            <div th:if="${top_searches != null and !top_searches.isEmpty()}" class="mt-3 mb-3">
+                <h6 class="text-secondary">Most Searched Terms</h6>
+                <div class="d-flex flex-wrap gap-2">
+                    <a th:each="term : ${top_searches}"
+                       th:href="@{/search(term=${term})}"
+                       th:text="${term}"
+                       class="btn btn-sm btn-outline-secondary rounded-pill"></a>
+                </div>
+            </div>
             <div class="results" th:if="${results}">
-                <h4 class="mb-3">Results for '<span class="text-success-emphasis" th:text="${term}"></span>':</h4>
+                <h4 class="mb-3">Results for '<span class="text-success fst-italic" th:text="${term}"></span>':</h4>
                 <div class="list-group">
                     <div th:each="result : ${results}" class="list-group-item">
                         <h5>
