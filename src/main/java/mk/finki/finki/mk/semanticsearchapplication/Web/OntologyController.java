@@ -12,7 +12,6 @@ import java.util.Map;
 
 @Controller
 public class OntologyController {
-
     @Autowired
     private OntologyService ontologyService;
     @Autowired
@@ -29,7 +28,7 @@ public class OntologyController {
             model.addAttribute("error", String.format("The term %s you searched, does not exist. Try again :)", term));
             return "index";
         }
-        List<Map<String,String>> results = ontologyService.queryOntology(term);
+        List<Map<String, String>> results = ontologyService.queryOntology(term);
         searchTermTracker.trackSearch(term);
 
         model.addAttribute("results", results);
@@ -50,6 +49,7 @@ public class OntologyController {
         model.addAttribute("uri", uri);
         return "details";
     }
+
     @GetMapping("/api/tree/roots")
     @ResponseBody
     public List<Map<String, Object>> getRootTree() {
@@ -63,6 +63,7 @@ public class OntologyController {
             @RequestParam(required = false) String selectedUri) {
         return ontologyService.getChildrenForUri(uri, selectedUri);
     }
+
     @GetMapping("/api/tree/path")
     @ResponseBody
     public List<String> getPath(@RequestParam String uri) {
