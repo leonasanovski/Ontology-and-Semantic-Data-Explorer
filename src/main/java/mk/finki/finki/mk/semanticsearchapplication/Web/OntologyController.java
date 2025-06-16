@@ -12,10 +12,14 @@ import java.util.Map;
 
 @Controller
 public class OntologyController {
-    @Autowired
-    private OntologyService ontologyService;
-    @Autowired
-    private SearchTermTracker searchTermTracker;
+
+    private final OntologyService ontologyService;
+    private final SearchTermTracker searchTermTracker;
+
+    public OntologyController(OntologyService ontologyService, SearchTermTracker searchTermTracker) {
+        this.ontologyService = ontologyService;
+        this.searchTermTracker = searchTermTracker;
+    }
 
     @GetMapping("/")
     public String index() {
@@ -68,5 +72,12 @@ public class OntologyController {
     @ResponseBody
     public List<String> getPath(@RequestParam String uri) {
         return ontologyService.getPathToRoot(uri);
+    }
+
+    //auto suggestion
+    @GetMapping("/api/suggestions")
+    @ResponseBody
+    public List<String> getSuggestions(@RequestParam String prefix) {
+        return ontologyService.getSuggestionsByPrefix(prefix);
     }
 }
